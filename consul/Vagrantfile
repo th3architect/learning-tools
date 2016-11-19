@@ -1,17 +1,16 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
-# Specify Vagrant version, Vagrant API version, and Vagrant clone location
-Vagrant.require_version ">= 1.6.0"
-VAGRANTFILE_API_VERSION = "2"
-ENV['VAGRANT_VMWARE_CLONE_DIRECTORY'] = '~/.vagrant'
+# Specify minimum Vagrant version and Vagrant API version
+Vagrant.require_version '>= 1.6.0'
+VAGRANTFILE_API_VERSION = '2'
 
 # Require 'yaml' module
 require 'yaml'
 
 # Read YAML file with VM details (box, CPU, RAM, IP addresses)
-# Be sure to edit servers.yml to provide correct IP addresses
-servers = YAML.load_file('servers.yml')
+# Be sure to edit machines.yml to provide correct IP addresses
+machines = YAML.load_file(File.join(File.dirname(__FILE__), 'machines.yml'))
 
 # Create and configure the VMs
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
@@ -20,26 +19,41 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.ssh.insert_key = false
 
   # Iterate through entries in YAML file to create VMs
-  servers.each do |servers|
-    config.vm.define servers["name"] do |srv|
+  machines.each do |machine|
+    config.vm.define machine['name'] do |srv|
+
       # Don't check for box updates
       srv.vm.box_check_update = false
-      srv.vm.hostname = servers["name"]
-      srv.vm.box = servers["box"]
+
+      # Specify hostname and Vagrant box
+      srv.vm.hostname = machine['name']
+      srv.vm.box = machine['box']['vmw']
+
       # Assign an additional static private network
-      srv.vm.network "private_network", ip: servers["priv_ip"]
+      srv.vm.network 'private_network', ip: machine['priv_ip']
+
       # Specify default synced folder; requires VMware Tools
-      srv.vm.synced_folder ".", "/vagrant"
-      # Provision consul to the VMs
-      srv.vm.provision "shell", path: "consul.sh"
+      srv.vm.synced_folder '.', '/vagrant', disabled: true
+
       # Copy in the Consul configuration files
-      srv.vm.provision "file", source: "bootstrap.json", destination: "/etc/consul.d/bootstrap/config.json"
-      srv.vm.provision "file", source: "server.json", destination: "/etc/consul.d/server/config.json"
-      # Configure VMs with RAM and CPUs per settings in servers.yml
-      srv.vm.provider :vmware_fusion do |vmw|
-        vmw.vmx["memsize"] = servers["ram"]
-        vmw.vmx["numvcpus"] = servers["vcpu"]
-      end
-    end
-  end
-end
+      srv.vm.provision 'file', source: 'server.json', destination: '/home/vagrant/config.json'
+      srv.vm.provision 'file', source: 'consul.conf', destination: '/home/vagrant/consul.conf'
+
+      # Provision consul to the VMs
+      srv.vm.provision 'shell', path: 'consul.sh'
+
+      # Configure VMs with RAM and CPUs per settings in machines.yml (Fusion)
+      srv.vm.provider 'vmware_fusion' do |vmw|
+        vmw.vmx['memsize'] = machine['ram']
+        vmw.vmx['numvcpus'] = machine['vcpu']
+      end # srv.vm.provider 'vmware_fusion'
+
+      # Configure VMs with RAM and CPUs per settings in machines.yml (VirtualBox)
+      srv.vm.provider 'virtualbox' do |vb, override|
+        vb.memory = machine['ram']
+        vb.cpus = machine['vcpu']
+        override.vm.box = machine['box']['vb']
+      end # srv.vm.provider 'virtualbox'
+    end # config.vm.define
+  end # machines.each
+end # Vagrant.configure

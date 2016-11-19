@@ -1,5 +1,0 @@
----
-- name: generic
-  box: dhoppe/debian-8.0.0-amd64-nocm
-  ram: 1024
-  vcpu: 1

@@ -6,3 +6,5 @@
 .bundle/
 .vagrant
 real-adminrc
+*.taskpaper
+terraform/tf-example/terraform.tfstate*
